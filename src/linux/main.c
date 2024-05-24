@@ -24,13 +24,12 @@ int execute_shellcode(void* shellcode, size_t size) {
 	// copy shellcode to executable memory
 	memcpy(executable_memory, shellcode, size);
 
-	// test to show shellcode function
-	for (size_t i = 0; i < size; i++) {
-		printf("%dth byte: 0x%x\n", i, ((unsigned char*)executable_memory)[i]);
-	}
-	
 	// create shellcode function pointer
 	int (*shellcode_func)() = (int (*)())executable_memory;
+
+	for (size_t i = 0; i < size; i++) {
+		printf("%dth byte: 0x%x\n", i, ((unsigned char*)shellcode_func)[i]);
+	}
 
 	// run shellcode and store return
 	int return_code = shellcode_func();
@@ -64,9 +63,10 @@ size_t get_shellcode(void** shellcode, const char* url) {
     "Hello wolrd!\r\n";     // OR       "\x48\x65\x6c\x6c\x6f\x2c\x20\x57"
                             //          "\x6f\x72\x6c\x64\x21\x0d\x0a"
 
-	size_t size = sizeof(hello_code);  // content-length;
-	(*shellcode) = malloc(size);  // copy data to shellcode
+	size_t size = sizeof(hello_code) - 1;  // content-length;
+	(*shellcode) = malloc(size);  // allocate memory to store shellcode
 
+	// copy shellcode to allocated memory
 	memcpy(*shellcode, hello_code, size);	
 	// memset(*shellcode, 0xc3, size);
 	// (*((char **)shellcode))[0] = '\x90';
@@ -83,7 +83,7 @@ int main(int argc, const char** argv) {
 	// }
 
 	int status = execute_shellcode(shellcode, shellcode_size);
-	printf("Shellcode exit status: %d", status);
+	printf("Shellcode exit status: %d\n", status);
 
 	// free allocated shellcode
 	free(shellcode);

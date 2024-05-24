@@ -5,7 +5,8 @@ WIN_BUILDDIR=build/windows
 LINUX_BUILDDIR=build/linux
 
 CC=gcc
-CFLAGS=-s -O3 -static
+# CFLAGS=-s -O3 -static  # will cause valgrind memory errors
+CFLAGS=-fno-stack-protector -z execstack
 
 all:
 	$(error Choose either `windows` or `linux` as the make target)
