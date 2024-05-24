@@ -27,6 +27,7 @@ int execute_shellcode(void* shellcode, size_t size) {
 	// create shellcode function pointer
 	int (*shellcode_func)() = (int (*)())executable_memory;
 
+	// show shellcode function instructions
 	for (size_t i = 0; i < size; i++) {
 		printf("%dth byte: 0x%x\n", i, ((unsigned char*)shellcode_func)[i]);
 	}
